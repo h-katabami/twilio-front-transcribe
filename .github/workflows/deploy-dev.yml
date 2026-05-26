@@ -44,14 +44,14 @@ jobs:
               echo "AWS_REGION=ap-northeast-1" >> "$GITHUB_ENV"
               echo "AWS_ACCOUNT_ID=237710157750" >> "$GITHUB_ENV"
               echo "STACK_NAME=twilio-front-transcribe" >> "$GITHUB_ENV"
-              echo "FRONT_PATH=Transcribe" >> "$GITHUB_ENV"
+              echo "FRONT_PATH=transcribe" >> "$GITHUB_ENV"
               ;;
             prod)
               echo "APP_ENV=prod" >> "$GITHUB_ENV"
               echo "AWS_REGION=us-east-1" >> "$GITHUB_ENV"
               echo "AWS_ACCOUNT_ID=353666332910" >> "$GITHUB_ENV"
               echo "STACK_NAME=twilio-front-transcribe" >> "$GITHUB_ENV"
-              echo "FRONT_PATH=Transcribe" >> "$GITHUB_ENV"
+              echo "FRONT_PATH=transcribe" >> "$GITHUB_ENV"
               ;;
             *)
               echo "Unsupported target: $target" >&2

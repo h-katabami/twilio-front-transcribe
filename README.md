@@ -1,4 +1,4 @@
-# twilio-front-transcribe2 設計方針
+# twilio-front-transcribe 設計方針
 
 ## 1. 目的
 このリポジトリは、Twilio書き起こしフロントエンドの次世代実装を、運用しやすい構成で再構築するためのプロジェクトです。

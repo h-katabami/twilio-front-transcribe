@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: twilio-front-transcribe2 backend (Lambda + API Gateway)
+Description: twilio-front-transcribe backend (Lambda + API Gateway)
 
 Parameters:
   EnvironmentName:

@@ -166,7 +166,7 @@ function createLogsParams(company: string, filters: LogFilters): URLSearchParams
   if (filters.startDate) params.set("startDate", filters.startDate);
   if (filters.endDate) params.set("endDate", filters.endDate);
   if (filters.statusCheckpoint) params.set("statusCheckpoint", filters.statusCheckpoint);
-  if (filters.excludeTestNumber) params.set("excludeTestNumber", "true");
+  params.set("excludeTestNumber", "false");
   return params;
 }
 

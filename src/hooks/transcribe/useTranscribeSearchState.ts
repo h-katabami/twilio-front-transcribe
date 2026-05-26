@@ -53,7 +53,10 @@ export function useTranscribeSearchState(companies: string[]): UseTranscribeSear
 
   const onSearch = () => {
     setAppliedCompany(company);
-    setAppliedFilters(draftFilters);
+    setAppliedFilters({
+      ...draftFilters,
+      excludeTestNumber: false,
+    });
   };
 
   return {

@@ -41,7 +41,14 @@ export function useTranscribeQueries(params: UseTranscribeQueriesParams) {
   const hasSelectedCallSid = Boolean(selectedCallSid);
 
   const logsQuery = useQuery({
-    queryKey: ["logs", appliedCompany, appliedFilters.startDate, appliedFilters.endDate, appliedFilters.statusCheckpoint] as const,
+    queryKey: [
+      "logs",
+      appliedCompany,
+      appliedFilters.startDate,
+      appliedFilters.endDate,
+      appliedFilters.statusCheckpoint,
+      appliedFilters.excludeTestNumber,
+    ] as const,
     queryFn: async () => fetchLogs(await getToken(), appliedCompany, appliedFilters),
     enabled: hasAppliedCompany,
   });

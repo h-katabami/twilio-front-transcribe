@@ -148,10 +148,27 @@ select {
   line-height: 1.35;
 }
 
-.filters label > input,
+.filters label > input:not([type="checkbox"]),
 .filters label > select {
   min-height: 40px;
   line-height: 1.35;
+}
+
+.filter-checkbox-row {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+
+.filter-checkbox-row > input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  accent-color: #0c8797;
 }
 
 .content-grid {

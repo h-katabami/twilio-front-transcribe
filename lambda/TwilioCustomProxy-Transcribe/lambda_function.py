@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import logging
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -19,6 +20,9 @@ JST = ZoneInfo("Asia/Tokyo")
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(TABLE_NAME)
 s3_client = boto3.client("s3")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+TEST_PHONE_NUMBER = "+819078252706"
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +72,10 @@ def _parse_path(event):
 def _query_params(event):
     params = event.get("queryStringParameters") or {}
     return {str(k): v for k, v in params.items()} if isinstance(params, dict) else {}
+
+
+def _to_bool(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +141,80 @@ def _to_csv_cell(value):
     return str(value)
 
 
+def _get_full_call_item(item):
+    """GSIの投影で欠落した属性を補うため、必要に応じて本体レコードを再取得する"""
+    if not _is_call_record(item):
+        return item
+
+    has_points = isinstance(item.get("inputs_point"), list)
+    has_user_inputs = isinstance(item.get("user_inputs"), list)
+    has_recording_urls = isinstance(item.get("recording_url"), list)
+    if has_points or has_user_inputs or has_recording_urls:
+        return item
+
+    pk = str(item.get("PK") or "")
+    sk = str(item.get("SK") or "")
+    if not pk or not sk:
+        return item
+
+    try:
+        res = table.get_item(Key={"PK": pk, "SK": sk})
+    except Exception:
+        logger.exception("failed_to_get_full_call_item pk=%s sk=%s", pk, sk)
+        return item
+
+    full_item = res.get("Item")
+    if not isinstance(full_item, dict):
+        return item
+    return full_item
+
+
+def _matches_test_phone(item):
+    call_from = str(item.get("call_from") or "").strip()
+    call_to = str(item.get("call_to") or "").strip()
+    return call_from == TEST_PHONE_NUMBER or call_to == TEST_PHONE_NUMBER
+
+
+def _exclude_test_phone_items(items, exclude_test_number):
+    if not exclude_test_number:
+        return items
+
+    filtered = []
+    removed_count = 0
+    hydrated_count = 0
+
+    for item in items:
+        if not _is_call_record(item):
+            filtered.append(item)
+            continue
+
+        target_item = item
+        call_from = str(item.get("call_from") or "").strip()
+        call_to = str(item.get("call_to") or "").strip()
+        if not call_from and not call_to:
+            full_item = _get_full_call_item(item)
+            if full_item is not item:
+                hydrated_count += 1
+                target_item = full_item
+
+        if _matches_test_phone(target_item):
+            removed_count += 1
+            continue
+
+        filtered.append(item)
+
+    logger.info(
+        "exclude_test_phone applied=%s before=%s after=%s removed=%s hydrated=%s",
+        exclude_test_number,
+        len(items),
+        len(filtered),
+        removed_count,
+        hydrated_count,
+    )
+
+    return filtered
+
+
 # ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
@@ -172,6 +254,7 @@ def _list_logs(event):
     params = _query_params(event)
     company = str(params.get("company") or "").strip()
     status_checkpoint = str(params.get("statusCheckpoint") or "").strip()
+    exclude_test_number = _to_bool(params.get("excludeTestNumber"))
     if not company:
         return _error(400, "company は必須です")
 
@@ -181,6 +264,7 @@ def _list_logs(event):
 
     if status_checkpoint:
         items = _filter_items_by_status_checkpoint(items, status_checkpoint)
+    items = _exclude_test_phone_items(items, exclude_test_number)
 
     summaries = [_to_log_summary(item, company) for item in items]
     return _response(200, {"items": summaries})
@@ -318,6 +402,7 @@ def _export_calls_csv(event):
     """GET /logs/csv/calls?company=...&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD"""
     params = _query_params(event)
     company = str(params.get("company") or "").strip()
+    exclude_test_number = _to_bool(params.get("excludeTestNumber"))
     if not company:
         return _error(400, "company は必須です")
 
@@ -325,6 +410,7 @@ def _export_calls_csv(event):
     if error:
         return error
     items = _filter_items_by_status_checkpoint(items, params.get("statusCheckpoint", ""))
+    items = _exclude_test_phone_items(items, exclude_test_number)
 
     call_items = [item for item in items if _is_call_record(item)]
     headers = [
@@ -359,6 +445,7 @@ def _export_transcriptions_csv(event):
     """GET /logs/csv/transcriptions?company=...&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD"""
     params = _query_params(event)
     company = str(params.get("company") or "").strip()
+    exclude_test_number = _to_bool(params.get("excludeTestNumber"))
     if not company:
         return _error(400, "company は必須です")
 
@@ -366,6 +453,16 @@ def _export_transcriptions_csv(event):
     if error:
         return error
     items = _filter_items_by_status_checkpoint(items, params.get("statusCheckpoint", ""))
+    items = _exclude_test_phone_items(items, exclude_test_number)
+
+    logger.info(
+        "transcriptions_export_start company=%s startDate=%s endDate=%s statusCheckpoint=%s itemCount=%s",
+        company,
+        params.get("startDate", ""),
+        params.get("endDate", ""),
+        params.get("statusCheckpoint", ""),
+        len(items),
+    )
 
     headers = [
         "cid",
@@ -378,18 +475,47 @@ def _export_transcriptions_csv(event):
     ]
 
     rows = []
+    call_item_count = 0
+    hydrated_count = 0
+    no_inputs_point_count = 0
+    fallback_user_inputs_nonempty_count = 0
+    malformed_inputs_point_count = 0
+    sample_payload = []
+
     for item in items:
         if not _is_call_record(item):
             continue
 
-        points = item.get("inputs_point") if isinstance(item.get("inputs_point"), list) else []
-        recording_urls = item.get("recording_url") if isinstance(item.get("recording_url"), list) else []
+        call_item_count += 1
+
+        full_item = _get_full_call_item(item)
+        if full_item is not item:
+            hydrated_count += 1
+
+        points = full_item.get("inputs_point") if isinstance(full_item.get("inputs_point"), list) else []
+        user_inputs = full_item.get("user_inputs") if isinstance(full_item.get("user_inputs"), list) else []
+        if not points:
+            no_inputs_point_count += 1
+            if user_inputs:
+                fallback_user_inputs_nonempty_count += 1
+
+        recording_urls = full_item.get("recording_url") if isinstance(full_item.get("recording_url"), list) else []
         recording_url = str(recording_urls[0] or "") if recording_urls else ""
-        cid = str(item.get("call_sid") or "")
-        status = str(item.get("status") or "")
+        cid = str(full_item.get("call_sid") or "")
+        status = str(full_item.get("status") or "")
+
+        if len(sample_payload) < 5:
+            sample_payload.append({
+                "cid": cid,
+                "status": status,
+                "inputs_point_len": len(points),
+                "user_inputs_len": len(user_inputs),
+                "item_keys": sorted(list(full_item.keys())),
+            })
 
         for point in points:
             if not isinstance(point, dict):
+                malformed_inputs_point_count += 1
                 continue
             rows.append([
                 cid,
@@ -400,6 +526,28 @@ def _export_transcriptions_csv(event):
                 str(point.get("input") or ""),
                 "TRUE",
             ])
+
+    if not rows:
+        logger.warning(
+            "transcriptions_export_empty_rows company=%s callItemCount=%s hydratedCount=%s noInputsPointCount=%s userInputsNonEmptyWhenInputsPointEmpty=%s malformedInputsPointCount=%s sample=%s",
+            company,
+            call_item_count,
+            hydrated_count,
+            no_inputs_point_count,
+            fallback_user_inputs_nonempty_count,
+            malformed_inputs_point_count,
+            json.dumps(sample_payload, ensure_ascii=False, default=_json_default),
+        )
+    else:
+        logger.info(
+            "transcriptions_export_rows_built company=%s callItemCount=%s hydratedCount=%s rowCount=%s noInputsPointCount=%s malformedInputsPointCount=%s",
+            company,
+            call_item_count,
+            hydrated_count,
+            len(rows),
+            no_inputs_point_count,
+            malformed_inputs_point_count,
+        )
 
     csv_text = _render_csv(headers, rows)
     response, export_error = _export_csv_to_s3(csv_text, company, "transcriptions")

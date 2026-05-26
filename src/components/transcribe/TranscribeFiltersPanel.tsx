@@ -74,6 +74,20 @@ export function TranscribeFiltersPanel(props: TranscribeFiltersPanelProps) {
             </select>
           </label>
 
+          <label className="filter-checkbox-row">
+            <input
+              type="checkbox"
+              checked={props.filters.excludeTestNumber}
+              onChange={(event) =>
+                props.onFiltersChange({
+                  ...props.filters,
+                  excludeTestNumber: event.target.checked,
+                })
+              }
+            />
+            テスト番号を除く
+          </label>
+
           <button className="search-button" type="button" onClick={props.onSearch}>検索</button>
         </div>
       </section>

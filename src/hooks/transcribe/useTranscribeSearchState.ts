@@ -16,6 +16,7 @@ function createInitialFilters(): LogFilters {
     startDate: value,
     endDate: value,
     statusCheckpoint: "",
+    excludeTestNumber: false,
   };
 }
 

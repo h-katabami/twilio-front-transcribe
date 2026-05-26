@@ -49,4 +49,5 @@ export type LogFilters = {
   startDate: string;
   endDate: string;
   statusCheckpoint: string;
+  excludeTestNumber: boolean;
 };

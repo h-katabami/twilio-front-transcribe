@@ -1,6 +1,7 @@
 import { LoadingSkeleton } from "../../components/ui/LoadingSkeleton";
 import { StatusChip } from "../../components/ui/StatusChip";
 import type { LogSummary } from "../../types/transcribe/domain.ts";
+import { formatDateTimeJa } from "../../utils/formatDateTimeJa";
 
 type TranscribeLogListProps = {
   logs: LogSummary[];
@@ -28,8 +29,7 @@ export function TranscribeLogList(props: TranscribeLogListProps) {
 
       <ul className="log-list">
         {props.logs.map((log) => {
-          const date = new Date(log.startedAt);
-          const startedAtLabel = Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("ja-JP");
+          const startedAtLabel = formatDateTimeJa(log.startedAt);
 
           return (
             <li key={log.callSid}>

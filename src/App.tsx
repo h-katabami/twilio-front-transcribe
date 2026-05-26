@@ -2,11 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { useAuth, AuthProvider } from "./hooks/useAuth";
+import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { useEnv } from "./hooks/useEnv";
+import "./index.css";
 import { SignInPage } from "./pages/SignInPage";
 import { TranscribePage } from "./pages/TranscribePage";
-import "./index.css";
 
 function PrivateRoute({ children }: { children: ReactNode }) {
   const { ready, authenticated } = useAuth();
@@ -41,14 +41,14 @@ export default function App() {
           <Routes>
             <Route path="/signin" element={<SignInPage />} />
             <Route
-              path="/transcribe"
+              path="/logs"
               element={(
                 <PrivateRoute>
                   <TranscribePage />
                 </PrivateRoute>
               )}
             />
-            <Route path="*" element={<Navigate to="/transcribe" replace />} />
+            <Route path="*" element={<Navigate to="/logs" replace />} />
           </Routes>
         </BrowserRouter>
       </QueryClientProvider>

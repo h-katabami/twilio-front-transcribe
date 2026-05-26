@@ -2,6 +2,7 @@ import { LoadingSkeleton } from "../../components/ui/LoadingSkeleton";
 import { StatusChip } from "../../components/ui/StatusChip";
 import { useInputPointAudioPlayer } from "../../hooks/transcribe/useInputPointAudioPlayer";
 import type { InputPoint, LogDetail } from "../../types/transcribe/domain.ts";
+import { formatDateTimeJa } from "../../utils/formatDateTimeJa";
 
 type TranscribeDetailPanelProps = {
   selectedCallSid: string;
@@ -17,6 +18,16 @@ function getInputPoints(detail: LogDetail | null | undefined): InputPoint[] {
   return Array.isArray(detail.history.inputPoints) ? detail.history.inputPoints : [];
 }
 
+function normalizePhoneNumber(phoneNumber: string | null | undefined): string {
+  if (!phoneNumber) {
+    return "-";
+  }
+  if (phoneNumber.startsWith("+81")) {
+    return `0${phoneNumber.slice(3)}`;
+  }
+  return phoneNumber;
+}
+
 export function TranscribeDetailPanel(props: TranscribeDetailPanelProps) {
   const points = getInputPoints(props.detail);
   const shouldShowInitialLoading = props.isLoading && Boolean(props.selectedCallSid) && !props.detail;
@@ -25,11 +36,7 @@ export function TranscribeDetailPanel(props: TranscribeDetailPanelProps) {
     if (!props.detail) {
       return "-";
     }
-    const date = new Date(props.detail.history.startedAt);
-    if (Number.isNaN(date.getTime())) {
-      return "-";
-    }
-    return date.toLocaleString("ja-JP");
+    return formatDateTimeJa(props.detail.history.startedAt);
   })();
   const {
     audioRef,
@@ -53,8 +60,8 @@ export function TranscribeDetailPanel(props: TranscribeDetailPanelProps) {
           <div className="detail-grid">
             <p><strong>Call SID:</strong> {props.detail.callSid}</p>
             <p><strong>会社:</strong> {props.detail.history.company || "-"}</p>
-            <p><strong>発信元:</strong> {props.detail.history.callFrom || "-"}</p>
-            <p><strong>着信先:</strong> {props.detail.history.callTo || "-"}</p>
+            <p><strong>発信元:</strong> {normalizePhoneNumber(props.detail.history.callFrom)}</p>
+            <p><strong>着信先:</strong> {normalizePhoneNumber(props.detail.history.callTo)}</p>
             <p className="detail-full-row"><strong>開始:</strong> {startedAtLabel}</p>
             <div className="detail-status-row">
               <p>

@@ -1,0 +1,155 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+  push:
+    branches:
+      - dev
+      - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve deployment target
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            target="${{ github.event.inputs.target }}"
+          else
+            target="${{ github.ref_name }}"
+          fi
+
+          case "$target" in
+            dev)
+              echo "APP_ENV=dev" >> "$GITHUB_ENV"
+              echo "AWS_REGION=ap-northeast-1" >> "$GITHUB_ENV"
+              echo "AWS_ACCOUNT_ID=237710157750" >> "$GITHUB_ENV"
+              echo "STACK_NAME=twilio-front-transcribe" >> "$GITHUB_ENV"
+              echo "FRONT_PATH=Transcribe" >> "$GITHUB_ENV"
+              ;;
+            prod)
+              echo "APP_ENV=prod" >> "$GITHUB_ENV"
+              echo "AWS_REGION=us-east-1" >> "$GITHUB_ENV"
+              echo "AWS_ACCOUNT_ID=353666332910" >> "$GITHUB_ENV"
+              echo "STACK_NAME=twilio-front-transcribe" >> "$GITHUB_ENV"
+              echo "FRONT_PATH=Transcribe" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "Unsupported target: $target" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.target == 'prod' && 'us-east-1' || 'ap-northeast-1') || (github.ref_name == 'prod' && 'us-east-1' || 'ap-northeast-1') }}
+
+      - name: Verify AWS account
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(aws sts get-caller-identity --query Account --output text)
+          if [ "$actual" != "$AWS_ACCOUNT_ID" ]; then
+            echo "AWS account mismatch. expected=$AWS_ACCOUNT_ID actual=$actual" >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup SAM
+        uses: aws-actions/setup-sam@v2
+
+      - name: Load parameters from SSM
+        shell: bash
+        run: |
+          set -euo pipefail
+          names=(
+            "/front/domain"
+            "/front/auth-user-pool-id"
+            "/front/auth-user-pool-web-client-id"
+            "/front/cloudfront-distribution-id"
+            "/api/common-path"
+            "/api/proxy-path"
+          )
+
+          json=$(aws ssm get-parameters --with-decryption --names "${names[@]}" --region "$AWS_REGION")
+
+          get_value() {
+            local key="$1"
+            echo "$json" | jq -r --arg n "$key" '.Parameters[] | select(.Name == $n) | .Value'
+          }
+
+          {
+            echo "FRONT_DOMAIN=$(get_value "/front/domain")"
+            echo "FRONT_AUTH_USER_POOL_ID=$(get_value "/front/auth-user-pool-id")"
+            echo "FRONT_AUTH_USER_POOL_WEB_CLIENT_ID=$(get_value "/front/auth-user-pool-web-client-id")"
+            echo "API_COMMON_PATH=$(get_value "/api/common-path")"
+            echo "API_PROXY_PATH=$(get_value "/api/proxy-path")"
+            echo "FRONT_CLOUDFRONT_DISTRIBUTION_ID=$(get_value "/front/cloudfront-distribution-id")"
+          } >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload frontend to S3
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix=$(echo "$FRONT_PATH" | sed 's#^/*##; s#/*$##')
+          if [ -n "$prefix" ]; then
+            target="s3://$FRONT_DOMAIN/$prefix"
+            invalidate="/$prefix/*"
+          else
+            target="s3://$FRONT_DOMAIN"
+            invalidate="/*"
+          fi
+          aws s3 sync dist/ "$target" --delete --region "$AWS_REGION"
+          aws cloudfront create-invalidation \
+            --distribution-id "$FRONT_CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "$invalidate" \
+            --region "$AWS_REGION"
+
+      - name: Build SAM
+        run: sam build
+
+      - name: Deploy SAM
+        run: |
+          sam deploy \
+            --stack-name "$STACK_NAME" \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --resolve-s3 \
+            --region "$AWS_REGION" \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              EnvironmentName="$APP_ENV" \
+              FunctionName=TwilioCustomProxy-Transcribe \
+              StageName="$APP_ENV"

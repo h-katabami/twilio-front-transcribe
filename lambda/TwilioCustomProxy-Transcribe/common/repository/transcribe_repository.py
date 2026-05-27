@@ -3,7 +3,7 @@ from datetime import datetime
 from boto3.dynamodb.conditions import Key
 
 from common.response.http_response import error
-from common.service.app_context import LOGS_INDEX_NAME, TEST_PHONE_NUMBER, logger, table
+from common.service.app_context import LOGS_INDEX_NAME, TEST_PHONE_NUMBER, company_name_table, logger, table
 
 
 def paginate(kwargs):
@@ -55,6 +55,45 @@ def list_company_names():
         for item in items
         if (sk := str(item.get("SK") or "")).startswith("CompanyName#")
     })
+
+
+def list_company_name_items():
+    companies = list_company_names()
+    results = []
+
+    for company in companies:
+        response = company_name_table.get_item(Key={"company": company})
+        item = response.get("Item") or {}
+        active = item.get("active")
+        if active is False or str(active).lower() == "false":
+            continue
+
+        name = company
+        if active is True or str(active).lower() == "true":
+            name = str(item.get("name") or company).strip() or company
+
+        results.append({"company": company, "name": name})
+
+    return sorted(results, key=lambda item: (str(item.get("name") or ""), str(item.get("company") or "")))
+
+
+def resolve_company(company, company_name):
+    company_value = str(company or "").strip()
+    if company_value:
+        return company_value
+
+    company_name_value = str(company_name or "").strip()
+    if not company_name_value:
+        return ""
+
+    items = list_company_name_items()
+    matches = [str(item.get("company") or "") for item in items if str(item.get("name") or "").strip() == company_name_value]
+
+    unique_matches = sorted({value for value in matches if value})
+    if len(unique_matches) == 1:
+        return unique_matches[0]
+
+    return ""
 
 
 def load_status_scenario(company):

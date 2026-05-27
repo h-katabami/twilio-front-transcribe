@@ -6,6 +6,7 @@ from common.repository.transcribe_repository import (
     get_full_call_item,
     is_call_record,
     load_logs_items,
+    resolve_company,
 )
 from common.request.extract_event import query_params, to_bool
 from common.response.http_response import error, json_default
@@ -15,10 +16,10 @@ from common.service.export_csv_service import export_csv_to_s3, render_csv
 
 def execute(event):
     params = query_params(event)
-    company = str(params.get("company") or "").strip()
+    company = resolve_company(params.get("company"), params.get("company_name"))
     exclude_test_number = to_bool(params.get("excludeTestNumber"))
     if not company:
-        return error(400, "company は必須です")
+        return error(400, "company または company_name は必須です")
 
     items, query_error = load_logs_items(company, params.get("startDate", ""), params.get("endDate", ""))
     if query_error:

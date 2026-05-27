@@ -15,6 +15,9 @@ Parameters:
   TranscribeTableName:
     Type: AWS::SSM::Parameter::Value<String>
     Default: /dynamodb/main-table
+  CompanyNameTableName:
+    Type: String
+    Default: company_name
   TranscribeLogsIndexName:
     Type: String
     Default: ManagementScreenIndexV2
@@ -44,6 +47,7 @@ Resources:
       Environment:
         Variables:
           MAIN_TABLE: !Ref TranscribeTableName
+          COMPANY_NAME_TABLE: !Ref CompanyNameTableName
           TABLE_INDEX: !Ref TranscribeLogsIndexName
           EXPORT_BUCKET: !Ref TranscribeExportBucket
           EXPORT_URL_EXPIRES: !Ref TranscribeExportUrlExpires
@@ -74,12 +78,30 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TranscribeTableName}'
                   - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TranscribeTableName}/index/${TranscribeLogsIndexName}'
+              - Sid: CompanyNameRead
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt CompanyNameTable.Arn
               - Sid: S3Export
                 Effect: Allow
                 Action:
                   - s3:PutObject
                   - s3:GetObject
                 Resource: !Sub 'arn:aws:s3:::${TranscribeExportBucket}/*'
+
+  CompanyNameTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref CompanyNameTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: company
+          AttributeType: S
+      KeySchema:
+        - AttributeName: company
+          KeyType: HASH
 
 Outputs:
   FunctionArn:

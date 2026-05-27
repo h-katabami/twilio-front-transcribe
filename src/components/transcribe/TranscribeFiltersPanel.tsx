@@ -1,14 +1,15 @@
-import type { LogFilters } from "../../types/transcribe/domain.ts";
+type LogFilters = {
+  startDate: string;
+  endDate: string;
+};
 
 type TranscribeFiltersPanelProps = {
-  companies: string[];
-  statusCheckpoints: string[];
-  isLoadingStatusCheckpoints: boolean;
-  company: string;
+  companyName: string;
   filters: LogFilters;
-  onCompanyChange: (nextCompany: string) => void;
+  onCompanyNameChange: (nextCompanyName: string) => void;
   onFiltersChange: (nextFilters: LogFilters) => void;
   onSearch: () => void;
+  isSearching: boolean;
 };
 
 export function TranscribeFiltersPanel(props: TranscribeFiltersPanelProps) {
@@ -18,12 +19,12 @@ export function TranscribeFiltersPanel(props: TranscribeFiltersPanelProps) {
       <section className="filters" aria-label="通話ログ検索条件">
         <div className="filter-block">
           <label>
-            企業
-            <select value={props.company} onChange={(event) => props.onCompanyChange(event.target.value)}>
-              {props.companies.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
+            会社名
+            <input
+              type="text"
+              value={props.companyName}
+              onChange={(event) => props.onCompanyNameChange(event.target.value)}
+            />
           </label>
 
           <div className="filter-date-grid">
@@ -56,25 +57,9 @@ export function TranscribeFiltersPanel(props: TranscribeFiltersPanelProps) {
             </label>
           </div>
 
-          <label>
-            ステータス
-            <select
-              value={props.filters.statusCheckpoint}
-              onChange={(event) =>
-                props.onFiltersChange({
-                  ...props.filters,
-                  statusCheckpoint: event.target.value,
-                })
-              }
-            >
-              <option value="">{props.isLoadingStatusCheckpoints ? "読み込み中..." : "すべて"}</option>
-              {props.statusCheckpoints.map((statusCheckpoint) => (
-                <option key={statusCheckpoint} value={statusCheckpoint}>{statusCheckpoint}</option>
-              ))}
-            </select>
-          </label>
-
-          <button className="search-button" type="button" onClick={props.onSearch}>検索</button>
+          <button className="search-button" type="button" onClick={props.onSearch} disabled={props.isSearching}>
+            {props.isSearching ? "検索中..." : "検索"}
+          </button>
         </div>
       </section>
     </>

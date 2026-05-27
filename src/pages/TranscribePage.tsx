@@ -1,36 +1,26 @@
-import { TranscribeDetailPanel } from "../components/transcribe/TranscribeDetailPanel";
 import { TranscribeFiltersPanel } from "../components/transcribe/TranscribeFiltersPanel";
-import { TranscribeLogList } from "../components/transcribe/TranscribeLogList";
 import { ErrorModal } from "../components/ui/ErrorModal";
-import { QueryErrorNotice } from "../components/ui/QueryErrorNotice";
 import { useTranscribeData } from "../hooks/transcribe/useTranscribeData";
 import { useAuth } from "../hooks/useAuth";
 
 export function TranscribePage() {
   const { signOut } = useAuth();
   const {
-    companies,
-    companiesQuery,
-    statusCheckpoints,
-    statusCheckpointsQuery,
-    logs,
-    logsQuery,
-    detail,
-    detailQuery,
-    company,
-    onCompanyChange,
+    logsCount,
+    companyName,
+    onCompanyNameChange,
     filters,
     setFilters,
     onSearch,
     canDownloadCsv,
+    isSearching,
+    isActionLocked,
     downloadError,
     closeDownloadError,
     isDownloadingCalls,
     isDownloadingTranscriptions,
     onDownloadCallsCsv,
     onDownloadTranscriptionsCsv,
-    selectedCallSid,
-    setSelectedCallSid,
   } = useTranscribeData();
 
   return (
@@ -42,33 +32,28 @@ export function TranscribePage() {
         <button type="button" onClick={() => void signOut()}>サインアウト</button>
       </header>
 
-      <QueryErrorNotice errors={[companiesQuery.error, statusCheckpointsQuery.error, logsQuery.error, detailQuery.error]} />
-
       <section className="content-grid">
-        <article className="panel panel-log-column">
+        <article className="panel panel-search-column">
           <TranscribeFiltersPanel
-            companies={companies}
-            statusCheckpoints={statusCheckpoints}
-            isLoadingStatusCheckpoints={statusCheckpointsQuery.isLoading || statusCheckpointsQuery.isFetching}
-            company={company}
+            companyName={companyName}
             filters={filters}
-            onCompanyChange={onCompanyChange}
+            onCompanyNameChange={onCompanyNameChange}
             onFiltersChange={setFilters}
             onSearch={onSearch}
+            isSearching={isSearching}
           />
-          <TranscribeLogList
-            logs={logs}
-            isLoading={logsQuery.isLoading}
-            isFetching={logsQuery.isFetching}
-            selectedCallSid={selectedCallSid}
-            onSelectCallSid={setSelectedCallSid}
-          />
+
+          <section className="search-result-summary" aria-label="検索結果">
+            <h2>検索結果</h2>
+            <p className="result-count">該当件数: {logsCount}件</p>
+          </section>
+
           <section className="download-actions" aria-label="CSVダウンロード">
             <button
               type="button"
               className="download-button"
               onClick={() => void onDownloadCallsCsv()}
-              disabled={!canDownloadCsv || isDownloadingCalls || isDownloadingTranscriptions}
+              disabled={!canDownloadCsv || isActionLocked}
             >
               {isDownloadingCalls ? "URL生成中..." : "通話ログのダウンロード"}
             </button>
@@ -76,20 +61,11 @@ export function TranscribePage() {
               type="button"
               className="download-button"
               onClick={() => void onDownloadTranscriptionsCsv()}
-              disabled={!canDownloadCsv || isDownloadingCalls || isDownloadingTranscriptions}
+              disabled={!canDownloadCsv || isActionLocked}
             >
               {isDownloadingTranscriptions ? "URL生成中..." : "書き起こしログのダウンロード"}
             </button>
           </section>
-        </article>
-
-        <article className="panel panel-detail-column">
-          <TranscribeDetailPanel
-            selectedCallSid={selectedCallSid}
-            detail={detail}
-            isLoading={detailQuery.isLoading}
-            isFetching={detailQuery.isFetching}
-          />
         </article>
       </section>
 

@@ -7,7 +7,6 @@ interface ImportMetaEnv {
 	readonly FRONT_DOMAIN: string;
 	readonly FRONT_PATH: string;
 	readonly FRONT_CLOUDFRONT_DISTRIBUTION_ID?: string;
-	readonly API_COMMON_PATH: string;
 	readonly API_PROXY_PATH: string;
 }
 

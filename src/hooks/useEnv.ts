@@ -17,7 +17,6 @@ export const env = {
   authUserPoolWebClientId: required("FRONT_AUTH_USER_POOL_WEB_CLIENT_ID"),
   authDomain: required("FRONT_DOMAIN"),
   authPath: normalizeCookiePath(required("FRONT_PATH")),
-  apiBaseUrl: required("API_COMMON_PATH").replace(/\/+$/g, ""),
   proxyBaseUrl: required("API_PROXY_PATH").replace(/\/+$/g, ""),
 };
 

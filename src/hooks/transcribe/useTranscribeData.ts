@@ -1,80 +1,90 @@
+import { useQuery } from "@tanstack/react-query";
+import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { useApiProxy } from "../useApiProxy";
 import { useAuth } from "../useAuth";
-import { useCompaniesQuery, useStatusCheckpointsQuery, useTranscribeQueries } from "./useTranscribeQueries";
-import { useTranscribeSearchState } from "./useTranscribeSearchState";
 
-const EMPTY_STATUS_CHECKPOINTS: string[] = [];
+type LogFilters = {
+  startDate: string;
+  endDate: string;
+};
+
+function createInitialFilters(): LogFilters {
+  const value = dayjs().format("YYYY-MM-DD");
+  return {
+    startDate: value,
+    endDate: value,
+  };
+}
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
+    if (error.message.includes("company または company_name は必須です")) {
+      return "会社がヒットしませんでした";
+    }
     return error.message;
   }
   return "CSVダウンロードURLの取得に失敗しました。";
 }
 
-function triggerDownload(url: string): void {
-  const iframe = document.createElement("iframe");
-  iframe.style.display = "none";
-  iframe.src = url;
-  document.body.appendChild(iframe);
-
-  // Remove the temporary iframe after the request is fired.
-  window.setTimeout(() => {
-    iframe.remove();
-  }, 2000);
-}
-
 export function useTranscribeData() {
-  const { fetchCallsCsvDownloadUrl, fetchTranscriptionsCsvDownloadUrl } = useApiProxy();
+  const { fetchLogs, fetchCallsCsvDownloadUrl, fetchTranscriptionsCsvDownloadUrl } = useApiProxy();
   const { getToken } = useAuth();
-  const [selectedCallSid, setSelectedCallSid] = useState("");
   const [downloadError, setDownloadError] = useState("");
   const [isDownloadingCalls, setIsDownloadingCalls] = useState(false);
   const [isDownloadingTranscriptions, setIsDownloadingTranscriptions] = useState(false);
 
-  const companiesQuery = useCompaniesQuery(getToken);
-  const companies = companiesQuery.data ?? [];
-  const searchState = useTranscribeSearchState(companies);
-  const { setFilters } = searchState;
-  const statusCheckpointsQuery = useStatusCheckpointsQuery(getToken, searchState.company);
-  const statusCheckpoints = statusCheckpointsQuery.data ?? EMPTY_STATUS_CHECKPOINTS;
-  const selectedStatusCheckpoint = searchState.filters.statusCheckpoint;
+  const [companyName, setCompanyName] = useState("");
+  const [draftFilters, setDraftFilters] = useState<LogFilters>(createInitialFilters);
+  const [appliedCompanyName, setAppliedCompanyName] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState<LogFilters>(createInitialFilters);
 
-  useEffect(() => {
-    if (!selectedStatusCheckpoint) {
-      return;
-    }
-    if (!statusCheckpoints.includes(selectedStatusCheckpoint)) {
-      setFilters((current) => ({
-        ...current,
-        statusCheckpoint: "",
-      }));
-    }
-  }, [selectedStatusCheckpoint, setFilters, statusCheckpoints]);
-
-  const { logs, logsQuery, detail, detailQuery } = useTranscribeQueries({
-    getToken,
-    appliedCompany: searchState.appliedCompany,
-    appliedFilters: searchState.appliedFilters,
-    selectedCallSid,
+  const logsQuery = useQuery({
+    queryKey: ["logs", appliedCompanyName, appliedFilters.startDate, appliedFilters.endDate] as const,
+    queryFn: async () => fetchLogs(await getToken(), appliedCompanyName, appliedFilters),
+    enabled: Boolean(appliedCompanyName),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
-  const onCompanyChange = (nextCompany: string) => {
-    setSelectedCallSid("");
-    searchState.onCompanyChange(nextCompany);
+  const logsCount = logsQuery.data ?? 0;
+  const isSearching = logsQuery.isFetching;
+  const isActionLocked = isSearching || isDownloadingCalls || isDownloadingTranscriptions;
+
+  useEffect(() => {
+    if (!appliedCompanyName) {
+      return;
+    }
+
+    if (logsQuery.status === "error") {
+      setDownloadError(toErrorMessage(logsQuery.error));
+      return;
+    }
+
+    if (logsQuery.status === "success" && logsCount === 0) {
+      setDownloadError("会社がヒットしませんでした");
+    }
+  }, [appliedCompanyName, logsQuery.status, logsQuery.error, logsQuery.dataUpdatedAt, logsCount]);
+
+  const onCompanyNameChange = (nextCompanyName: string) => {
+    setCompanyName(nextCompanyName);
   };
 
   const onSearch = () => {
-    setSelectedCallSid("");
-    searchState.onSearch();
+    if (isSearching) {
+      return;
+    }
+
+    setDownloadError("");
+    const nextCompanyName = companyName.trim();
+    setAppliedCompanyName(nextCompanyName);
+    setAppliedFilters(draftFilters);
   };
 
-  const canDownloadCsv = Boolean(searchState.appliedCompany);
+  const canDownloadCsv = Boolean(appliedCompanyName) && logsQuery.status === "success";
 
   const onDownloadCallsCsv = async () => {
-    if (!canDownloadCsv) {
-      setDownloadError("先に検索を実行してからダウンロードしてください。");
+    if (isActionLocked || !canDownloadCsv) {
       return;
     }
 
@@ -84,10 +94,18 @@ export function useTranscribeData() {
       const token = await getToken();
       const url = await fetchCallsCsvDownloadUrl(
         token,
-        searchState.appliedCompany,
-        searchState.appliedFilters,
+        appliedCompanyName,
+        appliedFilters,
       );
-      triggerDownload(url);
+
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = url;
+      document.body.appendChild(iframe);
+
+      window.setTimeout(() => {
+        iframe.remove();
+      }, 2000);
     } catch (error) {
       setDownloadError(toErrorMessage(error));
     } finally {
@@ -96,8 +114,7 @@ export function useTranscribeData() {
   };
 
   const onDownloadTranscriptionsCsv = async () => {
-    if (!canDownloadCsv) {
-      setDownloadError("先に検索を実行してからダウンロードしてください。");
+    if (isActionLocked || !canDownloadCsv) {
       return;
     }
 
@@ -107,10 +124,18 @@ export function useTranscribeData() {
       const token = await getToken();
       const url = await fetchTranscriptionsCsvDownloadUrl(
         token,
-        searchState.appliedCompany,
-        searchState.appliedFilters,
+        appliedCompanyName,
+        appliedFilters,
       );
-      triggerDownload(url);
+
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = url;
+      document.body.appendChild(iframe);
+
+      window.setTimeout(() => {
+        iframe.remove();
+      }, 2000);
     } catch (error) {
       setDownloadError(toErrorMessage(error));
     } finally {
@@ -123,27 +148,20 @@ export function useTranscribeData() {
   };
 
   return {
-    companies,
-    companiesQuery,
-    statusCheckpoints,
-    statusCheckpointsQuery,
-    logs,
-    logsQuery,
-    detail,
-    detailQuery,
-    company: searchState.company,
-    onCompanyChange,
-    filters: searchState.filters,
-    setFilters: searchState.setFilters,
+    logsCount,
+    companyName,
+    onCompanyNameChange,
+    filters: draftFilters,
+    setFilters: setDraftFilters,
     onSearch,
     canDownloadCsv,
+    isSearching,
+    isActionLocked,
     downloadError,
     closeDownloadError,
     isDownloadingCalls,
     isDownloadingTranscriptions,
     onDownloadCallsCsv,
     onDownloadTranscriptionsCsv,
-    selectedCallSid,
-    setSelectedCallSid,
   };
 }

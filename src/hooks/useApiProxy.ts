@@ -9,6 +9,15 @@ type LogsResponsePayload = {
   items?: unknown[];
 };
 
+type CompanyItemDto = {
+  company?: string;
+  name?: string;
+};
+
+type CompaniesResponseDto = {
+  results?: CompanyItemDto[];
+};
+
 type RequestOptions = {
   token?: string | null;
   method?: string;
@@ -77,6 +86,17 @@ function extractDownloadUrl(payload: CsvDownloadResponseDto): string {
 }
 
 export function useApiProxy() {
+  const fetchCompanies = async (token: string | null): Promise<string[]> => {
+    const payload = await requestJson<CompaniesResponseDto>(serviceUrl("companies"), { token });
+    if (!Array.isArray(payload.results)) {
+      return [];
+    }
+
+    return payload.results
+      .map((item) => String(item?.name ?? "").trim())
+      .filter((name): name is string => Boolean(name));
+  };
+
   const fetchLogs = async (token: string | null, companyName: string, filters: LogFilters): Promise<number> => {
     const params = createLogsParams(companyName, filters);
 
@@ -108,6 +128,7 @@ export function useApiProxy() {
   };
 
   return {
+    fetchCompanies,
     fetchLogs,
     fetchCallsCsvDownloadUrl,
     fetchTranscriptionsCsvDownloadUrl,

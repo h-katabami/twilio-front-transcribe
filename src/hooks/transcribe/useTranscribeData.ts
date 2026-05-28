@@ -20,7 +20,7 @@ function createInitialFilters(): LogFilters {
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
     if (error.message.includes("company または company_name は必須です")) {
-      return "会社がヒットしませんでした";
+      return "ログが０件です";
     }
     return error.message;
   }
@@ -28,7 +28,7 @@ function toErrorMessage(error: unknown): string {
 }
 
 export function useTranscribeData() {
-  const { fetchLogs, fetchCallsCsvDownloadUrl, fetchTranscriptionsCsvDownloadUrl } = useApiProxy();
+  const { fetchCompanies, fetchLogs, fetchCallsCsvDownloadUrl, fetchTranscriptionsCsvDownloadUrl } = useApiProxy();
   const { getToken } = useAuth();
   const [downloadError, setDownloadError] = useState("");
   const [isDownloadingCalls, setIsDownloadingCalls] = useState(false);
@@ -38,6 +38,13 @@ export function useTranscribeData() {
   const [draftFilters, setDraftFilters] = useState<LogFilters>(createInitialFilters);
   const [appliedCompanyName, setAppliedCompanyName] = useState("");
   const [appliedFilters, setAppliedFilters] = useState<LogFilters>(createInitialFilters);
+
+  const companiesQuery = useQuery({
+    queryKey: ["companies"] as const,
+    queryFn: async () => fetchCompanies(await getToken()),
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
   const logsQuery = useQuery({
     queryKey: ["logs", appliedCompanyName, appliedFilters.startDate, appliedFilters.endDate] as const,
@@ -62,7 +69,7 @@ export function useTranscribeData() {
     }
 
     if (logsQuery.status === "success" && logsCount === 0) {
-      setDownloadError("会社がヒットしませんでした");
+      setDownloadError("ログが０件です");
     }
   }, [appliedCompanyName, logsQuery.status, logsQuery.error, logsQuery.dataUpdatedAt, logsCount]);
 
@@ -150,6 +157,7 @@ export function useTranscribeData() {
   return {
     logsCount,
     companyName,
+    companySuggestions: companiesQuery.data ?? [],
     onCompanyNameChange,
     filters: draftFilters,
     setFilters: setDraftFilters,

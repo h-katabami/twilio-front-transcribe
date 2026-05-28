@@ -5,6 +5,7 @@ type LogFilters = {
 
 type TranscribeFiltersPanelProps = {
   companyName: string;
+  companySuggestions: string[];
   filters: LogFilters;
   onCompanyNameChange: (nextCompanyName: string) => void;
   onFiltersChange: (nextFilters: LogFilters) => void;
@@ -13,6 +14,9 @@ type TranscribeFiltersPanelProps = {
 };
 
 export function TranscribeFiltersPanel(props: TranscribeFiltersPanelProps) {
+  const companySuggestions = Array.from(new Set(props.companySuggestions));
+  const companyListId = "company-suggestions";
+
   return (
     <>
       <h2>通話ログ検索</h2>
@@ -23,9 +27,16 @@ export function TranscribeFiltersPanel(props: TranscribeFiltersPanelProps) {
             <input
               type="text"
               value={props.companyName}
+              list={companyListId}
+              placeholder="会社名を入力または候補から選択"
               onChange={(event) => props.onCompanyNameChange(event.target.value)}
             />
           </label>
+          <datalist id={companyListId}>
+            {companySuggestions.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
 
           <div className="filter-date-grid">
             <label>

@@ -136,6 +136,13 @@ select {
   line-height: 1.35;
 }
 
+.filters label > input,
+.filters label > select {
+  background: #ffffff;
+  color: #1e2932;
+  color-scheme: light;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: 1fr;

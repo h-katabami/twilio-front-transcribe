@@ -2,9 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AppMenuLayout } from "./components/layout/AppMenuLayout";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { useEnv } from "./hooks/useEnv";
 import "./index.css";
+import { DashboardPage } from "./pages/DashboardPage";
 import { SignInPage } from "./pages/SignInPage";
 import { TranscribePage } from "./pages/TranscribePage";
 
@@ -41,10 +43,21 @@ export default function App() {
           <Routes>
             <Route path="/signin" element={<SignInPage />} />
             <Route
-              path="/logs"
               element={(
                 <PrivateRoute>
-                  <TranscribePage />
+                  <AppMenuLayout />
+                </PrivateRoute>
+              )}
+            >
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/logs" element={<TranscribePage />} />
+              <Route path="/transcribe" element={<Navigate to="/logs" replace />} />
+            </Route>
+            <Route
+              path="/"
+              element={(
+                <PrivateRoute>
+                  <Navigate to="/logs" replace />
                 </PrivateRoute>
               )}
             />

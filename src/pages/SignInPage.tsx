@@ -26,7 +26,7 @@ export function SignInPage() {
     }
 
     const base = env.pathText ? `/${env.pathText}` : "";
-    navigate(`${base}/transcribe`, { replace: true });
+    navigate(`${base}/logs`, { replace: true });
   };
 
   return (

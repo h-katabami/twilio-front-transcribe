@@ -4,10 +4,8 @@ import { TranscribeLogList } from "../components/transcribe/TranscribeLogList";
 import { ErrorModal } from "../components/ui/ErrorModal";
 import { QueryErrorNotice } from "../components/ui/QueryErrorNotice";
 import { useTranscribeData } from "../hooks/transcribe/useTranscribeData";
-import { useAuth } from "../hooks/useAuth";
 
 export function TranscribePage() {
-  const { signOut } = useAuth();
   const {
     companies,
     companiesQuery,
@@ -34,14 +32,7 @@ export function TranscribePage() {
   } = useTranscribeData();
 
   return (
-    <main className="page-layout transcribe-shell">
-      <header className="page-header page-hero">
-        <div>
-          <h1>AIC 書き起こし管理</h1>
-        </div>
-        <button type="button" onClick={() => void signOut()}>サインアウト</button>
-      </header>
-
+    <>
       <QueryErrorNotice errors={[companiesQuery.error, statusCheckpointsQuery.error, logsQuery.error, detailQuery.error]} />
 
       <section className="content-grid">
@@ -94,6 +85,6 @@ export function TranscribePage() {
       </section>
 
       {downloadError ? <ErrorModal message={downloadError} onClose={closeDownloadError} /> : null}
-    </main>
+    </>
   );
 }
